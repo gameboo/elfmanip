@@ -52,19 +52,15 @@ def dump_hex(some_bytes, some_width):
 ##################
 
 def elf_to_hex(elf, only_sec, outfile, byte_width):
-  sections = {}
-  sec_lst = elf.iter_sections()
   if only_sec:
-    sec_lst = [x for x in elf.iter_sections() if x.name in only_sec]
-  for section in sec_lst:
-    if (len(section.data()) != 0):
-      print("{:s} -- {:d} byte(s)".format(section.name, len(section.data())))
-      hd = section.header
-      sections[(hd['sh_addr'], hd['sh_size'])] = section.data() # XXX check addralign
-  print(sorted(sections))
-  lastaddr, lastsz = max(sections.keys())
-  data_bytes = bytearray(lastaddr + lastsz)
-  for (addr, sz), data in sorted(sections.items()):
+    sections = [x for x in elf.iter_sections() if x.name in only_sec]
+  else:
+    sections = list(elf.iter_sections())
+  sections = sorted(sections, key = lambda x: x.header["sh_addr"])
+  list(map(lambda x: print(x.name), sections))
+  last_section = sections[-1]
+  data_bytes = bytearray(last_section.header["sh_addr"] + last_section.header["sh_size"])
+  for addr, sz, data in [(s.header["sh_addr"],s.header["sh_size"],s.data()) for s in sections]:
     data_bytes[addr:addr+sz] = data # XXX check data sz compared to section sz
   outfile.write(dump_hex(data_bytes, byte_width))
 
