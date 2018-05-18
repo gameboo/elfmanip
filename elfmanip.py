@@ -47,6 +47,10 @@ def dump_hex(some_bytes, some_width):
     dump += "{:s}{:s}\n".format("00"*(some_width-i), word)
   return dump
 
+def input_y_n(prompt):
+  s = input(prompt)
+  return s == "yes"
+
 ##################
 # write hex file #
 ##################
@@ -56,12 +60,20 @@ def elf_to_hex(elf, only_sec, outfile, byte_width):
     sections = [x for x in elf.iter_sections() if x.name in only_sec]
   else:
     sections = list(elf.iter_sections())
-  sections = sorted(sections, key = lambda x: x.header["sh_addr"])
-  list(map(lambda x: print(x.name), sections))
+  #sections = sorted(sections, key = lambda x: x.header["sh_addr"])
   last_section = sections[-1]
   data_bytes = bytearray(last_section.header["sh_addr"] + last_section.header["sh_size"])
-  for addr, sz, data in [(s.header["sh_addr"],s.header["sh_size"],s.data()) for s in sections]:
-    data_bytes[addr:addr+sz] = data # XXX check data sz compared to section sz
+  last_top = 0
+  for section in sections:
+  #for addr, sz, data in [(s.header["sh_addr"],s.header["sh_size"],s.data()) for s in sections]:
+    skip = False
+    addr = section.header["sh_addr"]
+    if addr < last_top:
+      skip = input_y_n("{:s} overlaps with previous sections. Skip {:s} (yes/no) ? ".format(*[section.name]*2))
+    if not skip:
+      last_top = addr + section.header["sh_size"] # XXX check data sz compared to section sz
+      data_bytes[addr : last_top] = section.data()
+      print("{:s} section written (0x{:0X} to 0x{:0X})".format(section.name, addr, last_top))
   outfile.write(dump_hex(data_bytes, byte_width))
 
 #################
