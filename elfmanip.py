@@ -22,6 +22,8 @@ subcmds.required = True
 hexcmd = subcmds.add_parser('hex', help="generate a HEX file")
 hexcmd.add_argument('-s', '--only-section', nargs='+', default=None,
                     help="List the elf sections to include in the HEX output (default all)")
+hexcmd.add_argument('-f', '--force-skip', action="store_true",
+                    help="In case a section overlaos with an earlier section, force skipping.")
 
 args = parser.parse_args()
 
@@ -49,7 +51,7 @@ def dump_hex(some_bytes, some_width):
 
 def input_y_n(prompt):
   s = input(prompt)
-  return s == "yes"
+  return s.lower() in ["", "y", "ye", "yes"]
 
 ##################
 # write hex file #
@@ -69,7 +71,10 @@ def elf_to_hex(elf, only_sec, outfile, byte_width):
     skip = False
     addr = section.header["sh_addr"]
     if addr < last_top:
-      skip = input_y_n("{:s} overlaps with previous sections. Skip {:s} (yes/no) ? ".format(*[section.name]*2))
+      if args.force_skip:
+        skip = True
+      else:
+        skip = input_y_n("{:s} overlaps with previous sections. Skip {:s} (Y/n) ? ".format(*[section.name]*2))
     if not skip:
       last_top = addr + section.header["sh_size"] # XXX check data sz compared to section sz
       data_bytes[addr : last_top] = section.data()
