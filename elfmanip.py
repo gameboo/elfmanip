@@ -9,21 +9,26 @@ from elftools.elf.elffile import ELFFile
 # Parse command line arguments #
 ################################
 
-parser = argparse.ArgumentParser(description='Reads an elf file and exports it to another memory format')
+def auto_int (x):
+    return int(x,0)
 
-parser.add_argument('elf', type=str, metavar='ELF', help="the elf file to re-export")
+parser = argparse.ArgumentParser(description='Reads an elf file and exports it to another memory format.')
+
+parser.add_argument('elf', type=str, metavar='ELF',
+                    help="The elf file to re-export.")
 parser.add_argument('-o', '--output', type=str, metavar='OUTPUT',
-                    help="the output file to export to")
+                    help="The OUTPUT file to export to. When unspecified, it is derived from the ELF input.")
 
 subcmds = parser.add_subparsers(dest='subcmd',metavar='sub-command',help="Individual sub-command help available by invoking it with -h or --help.")
 subcmds.required = True
 
 # hex
-hexcmd = subcmds.add_parser('hex', help="generate a HEX file")
-hexcmd.add_argument('-s', '--only-section', nargs='+', default=None,
-                    help="List the elf sections to include in the HEX output (default all)")
+hexcmd = subcmds.add_parser('hex',
+                    help="Generate a HEX file.")
+hexcmd.add_argument('--only-section', nargs='+', default=None, metavar='SECTION',
+                    help="List the elf SECTIONs to include in the HEX output (default all).")
 hexcmd.add_argument('-f', '--force-skip', action="store_true",
-                    help="In case a section overlaos with an earlier section, force skipping.")
+                    help="In case a section overlaps with an earlier section, force skipping.")
 
 args = parser.parse_args()
 
@@ -62,12 +67,12 @@ def elf_to_hex(elf, only_sec, outfile, byte_width):
     sections = [x for x in elf.iter_sections() if x.name in only_sec]
   else:
     sections = list(elf.iter_sections())
-  #sections = sorted(sections, key = lambda x: x.header["sh_addr"])
-  last_section = sections[-1]
-  data_bytes = bytearray(last_section.header["sh_addr"] + last_section.header["sh_size"])
+  last_section = sorted(sections, key = lambda x: x.header["sh_addr"])[-1]
+  size = last_section.header["sh_addr"] + last_section.header["sh_size"]
+  data_bytes = bytearray(size)
+  #print(size)
   last_top = 0
   for section in sections:
-  #for addr, sz, data in [(s.header["sh_addr"],s.header["sh_size"],s.data()) for s in sections]:
     skip = False
     addr = section.header["sh_addr"]
     if addr < last_top:
