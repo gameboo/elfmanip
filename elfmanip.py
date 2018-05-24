@@ -147,7 +147,7 @@ def elf_sections_to_mif(sections, outfile, byte_width, addr_rad, data_rad, force
   for word in group_bytes(data_bytes, byte_width):
     data = int.from_bytes(word, byteorder='little', signed=(True if data_rad == 'DEC' else False))
     outfile.write("{:0{aw}{rad_a}}: {:0{dw}{rad_d}};\n".format(addr, data, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
-    addr += byte_width
+    addr += 1
   outfile.write("END;")
 
 #################
