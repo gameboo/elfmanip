@@ -29,18 +29,22 @@ hexcmd = subcmds.add_parser('hex',
                     help="Generate a HEX file.")
 hexcmd.add_argument('-f', '--force-skip', action="store_true",
                     help="In case a section overlaps with an earlier section, force skipping.")
+hexcmd.add_argument('-w', '--word-size', type=auto_int, default=4, metavar="BYTE_WIDTH",
+                    help="The size in bytes of a memory word.")
 
 # mif
 mifcmd = subcmds.add_parser('mif',
                     help="Generate a MIF file.")
 mifcmd.add_argument('-f', '--force-skip', action="store_true",
                     help="In case a section overlaps with an earlier section, force skipping.")
+mifcmd.add_argument('-w', '--word-size', type=auto_int, default=4, metavar="BYTE_WIDTH",
+                    help="The size in bytes of a memory word.")
 #binary (BIN), hexadecimal (HEX), octal (OCT), signed decimal (DEC), unsigned decimal (UNS)
 radices = ['BIN', 'HEX', 'OCT', 'DEC', 'UNS']
 mifcmd.add_argument('-a', '--address-radix', choices=radices, default='HEX', metavar='RADIX',
-        help="RADIX used to display the addresses, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
+                    help="RADIX used to display the addresses, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
 mifcmd.add_argument('-d', '--data-radix', choices=radices, default='HEX', metavar='RADIX',
-        help="RADIX used to display the data, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
+                    help="RADIX used to display the data, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
 
 args = parser.parse_args()
 
@@ -142,7 +146,7 @@ def elf_sections_to_mif(sections, outfile, byte_width, addr_rad, data_rad, force
   max_dw = field_width(byte_width, data_rad)
   for word in group_bytes(data_bytes, byte_width):
     data = int.from_bytes(word, byteorder='little', signed=(True if data_rad == 'DEC' else False))
-    outfile.write("{:0{aw}{rad_a}} :\t{:0{dw}{rad_d}};\n".format(addr, data, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
+    outfile.write("{:0{aw}{rad_a}}: {:0{dw}{rad_d}};\n".format(addr, data, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
     addr += byte_width
   outfile.write("END;")
 
@@ -163,9 +167,9 @@ def main():
       sections = list(elf.iter_sections())
     with open(args.output,"w") as out_f:
       if (args.subcmd == "hex"):
-        elf_sections_to_hex(sections, out_f, 4, force_skip=args.force_skip)
+        elf_sections_to_hex(sections, out_f, args.word_size, force_skip=args.force_skip)
       if (args.subcmd == "mif"):
-        elf_sections_to_mif(sections, out_f, 4, args.address_radix, args.data_radix, force_skip=args.force_skip)
+        elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix, force_skip=args.force_skip)
     exit(0)
 
 if __name__ == "__main__":
