@@ -20,6 +20,8 @@ parser.add_argument('-o', '--output', type=str, metavar='OUTPUT',
                     help="The OUTPUT file to export to. When unspecified, it is derived from the ELF input.")
 parser.add_argument('--only-section', nargs='+', default=None, metavar='SECTION',
                     help="List the elf SECTIONs to use when generating the output (default all).")
+parser.add_argument('--exclude-section', nargs='+', default=None, metavar='SECTION',
+        help="List the elf SECTIONs to exclude when generating the output (default none). Note: SECTIONs listed here will be excluded from the sections specified with --only-section as well.")
 
 subcmds = parser.add_subparsers(dest='subcmd',metavar='sub-command',help="Individual sub-command help available by invoking it with -h or --help.")
 subcmds.required = True
@@ -165,6 +167,8 @@ def main():
       sections = [x for x in elf.iter_sections() if x.name in args.only_section]
     else:
       sections = list(elf.iter_sections())
+    if args.exclude_section:
+      sections = [s for s in sections if s.name not in args.exclude_section]
     with open(args.output,"w") as out_f:
       if (args.subcmd == "hex"):
         elf_sections_to_hex(sections, out_f, args.word_size, force_skip=args.force_skip)
