@@ -10,7 +10,13 @@ from elftools.elf.elffile import ELFFile
 ################################
 
 def auto_int (x):
-    return int(x,0)
+  return int(x,0)
+
+def auto_pos_int (x):
+  val = int(x,0)
+  if val <= 0:
+      raise argparse.ArgumentTypeError("argument must be a positive int. Got {:d}.".format(val))
+  return val
 
 parser = argparse.ArgumentParser(description='Reads an elf file and exports it to another memory format.')
 
@@ -24,6 +30,8 @@ parser.add_argument('--exclude-section', nargs='+', default=None, metavar='SECTI
         help="List the elf SECTIONs to exclude when generating the output (default none). Note: SECTIONs listed here will be excluded from the sections specified with --only-section as well.")
 parser.add_argument('-f', '--force-skip', action="store_true",
                     help="In case a section overlaps with an earlier section, force skipping.")
+parser.add_argument('-v', '--verbose', action='count', default=0,
+        help="Increase verbosity level by adding more \"v\".")
 
 subcmds = parser.add_subparsers(dest='subcmd',metavar='sub-command',help="Individual sub-command help available by invoking it with -h or --help.")
 subcmds.required = True
@@ -31,13 +39,13 @@ subcmds.required = True
 # hex
 hexcmd = subcmds.add_parser('hex',
                     help="Generate a HEX file.")
-hexcmd.add_argument('-w', '--word-size', type=auto_int, default=4, metavar="BYTE_WIDTH",
+hexcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
                     help="The size in bytes of a memory word.")
 
 # mif
 mifcmd = subcmds.add_parser('mif',
                     help="Generate a MIF file.")
-mifcmd.add_argument('-w', '--word-size', type=auto_int, default=4, metavar="BYTE_WIDTH",
+mifcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
                     help="The size in bytes of a memory word.")
 #binary (BIN), hexadecimal (HEX), octal (OCT), signed decimal (DEC), unsigned decimal (UNS)
 radices = ['BIN', 'HEX', 'OCT', 'DEC', 'UNS']
@@ -52,8 +60,9 @@ args = parser.parse_args()
 # helpers #
 ###########
 
-def bundle(iterable, n):
-  return zip(*[iter(iterable)]*n)
+def verboseprint(lvl,msg):
+  if args.verbose >= lvl:
+    print(msg)
 
 def rad_to_fmt(rad):
   return {
@@ -67,6 +76,9 @@ def rad_to_fmt(rad):
 def field_width(width, rad):
   tmp = int.from_bytes(bytearray(b'\xff') * width, 'little')
   return len("{:{rd}}".format(tmp, rd=rad_to_fmt(rad)))
+
+#def bundle(iterable, n):
+#  return zip(*[iter(iterable)]*n)
 
 def group_bytes_padded(some_bytes, group_size):
   for i in range(0, len(some_bytes), group_size):
@@ -133,6 +145,7 @@ def filter_elf_sections(sections, only=None, exclude=None, force_skip=False):
 ##################
 
 def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
+  verboseprint(1,"Creating HEX file")
   ssections = sorted(sections, key = lambda x: x.header["sh_addr"])
   last_addr = 0
   remaining = bytearray(0)
@@ -141,7 +154,6 @@ def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
     if s.header["sh_size"] == 0:
       continue
     # sections with content...
-    print("starting sections {:s} with last_addr 0x{:x} remaining {:s}".format(str(s.name), last_addr, str(remaining)))
     addr  = s.header["sh_addr"]
     padding = remaining # fold in unaligned bytes from previous section
     if addr > last_addr: # fill gap with zeroes
@@ -163,6 +175,7 @@ def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
 ##################
 
 def elf_sections_to_mif(sections, outfile, byte_width, addr_rad, data_rad):
+  verboseprint(1,"Creating MIF file")
   ssections = sorted(sections, key = lambda x: x.header["sh_addr"])
   last_addr = ssections[-1].header["sh_addr"] + ssections[-1].header["sh_size"]
   nb_words = int(last_addr/byte_width)
@@ -193,11 +206,11 @@ def main():
   if args.output == None:
     args.output, _ = op.splitext(args.elf)
     args.output = op.basename(args.output)+"."+args.subcmd
-  print("args.output: {:s}".format(args.output))
   with open(args.elf,"rb") as in_f:
     elf = ELFFile(in_f)
     sections = filter_elf_sections(elf.iter_sections(), args.only_section, args.exclude_section, args.force_skip)
     with open(args.output,"w") as out_f:
+      verboseprint(1,"Opened {:s} for output".format(args.output))
       if (args.subcmd == "hex"):
         elf_sections_to_hex(sections, out_f, args.word_size)
       if (args.subcmd == "mif"):
