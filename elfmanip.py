@@ -154,7 +154,7 @@ def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
     if s.header["sh_size"] == 0:
       continue
     # sections with content...
-    addr  = s.header["sh_addr"]
+    addr = s.header["sh_addr"]
     padding = remaining # fold in unaligned bytes from previous section
     if addr > last_addr: # fill gap with zeroes
       padding += bytearray(addr - last_addr)
@@ -168,7 +168,7 @@ def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
     last_addr = addr + s.header["sh_size"]
   # remaining bytes to write ...
   if len(remaining) != 0:
-    outfile.write(dump_hex_padded(padding, byte_width))
+    outfile.write(dump_hex_padded(remaining, byte_width))
 
 ##################
 # write mif file #
