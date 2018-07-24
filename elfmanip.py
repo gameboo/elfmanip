@@ -47,6 +47,8 @@ mifcmd = subcmds.add_parser('mif',
                     help="Generate a MIF file.")
 mifcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
                     help="The size in bytes of a memory word.")
+mifcmd.add_argument('-g', '--group-same', action="store_true",
+                    help="Group successive same values of padding in one line.")
 #binary (BIN), hexadecimal (HEX), octal (OCT), signed decimal (DEC), unsigned decimal (UNS)
 radices = ['BIN', 'HEX', 'OCT', 'DEC', 'UNS']
 mifcmd.add_argument('-a', '--address-radix', choices=radices, default='HEX', metavar='RADIX',
@@ -174,28 +176,32 @@ def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
 # write mif file #
 ##################
 
-def elf_sections_to_mif(sections, outfile, byte_width, addr_rad, data_rad):
+def elf_sections_to_mif(sections, outfile, word_byte_width, addr_rad, data_rad, group_same=False):
   verboseprint(1,"Creating MIF file")
   ssections = sorted(sections, key = lambda x: x.header["sh_addr"])
   last_addr = ssections[-1].header["sh_addr"] + ssections[-1].header["sh_size"]
-  nb_words = int(last_addr/byte_width)
+  nb_words = int(last_addr/word_byte_width)
   outfile.write("DEPTH = {:d};\n".format(nb_words))
-  outfile.write("WIDTH = {:d};\n".format(byte_width*8))
+  outfile.write("WIDTH = {:d};\n".format(word_byte_width*8))
   outfile.write("ADDRESS_RADIX = {:s};\n".format(addr_rad))
   outfile.write("DATA_RADIX = {:s};\n".format(data_rad))
   outfile.write("CONTENT\n")
   outfile.write("BEGIN\n")
   max_aw = len("{:{rad}}".format(nb_words,rad=rad_to_fmt(addr_rad)))
-  max_dw = field_width(byte_width, data_rad)
-  addr = 0
+  max_dw = field_width(word_byte_width, data_rad)
+  word_addr = 0
   for s in ssections:
-    if s.header["sh_addr"] > addr: # fill gap with zeroes
-      outfile.write("[{:0{aw}{rad_a}}..{:0{aw}{rad_a}}]: {:0{dw}{rad_d}};\n".format(addr, s.header["sh_addr"]-1, 0, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
-      addr = s.header["sh_addr"]
-    for word in group_bytes_padded(s.data(), byte_width):
+    if int(s.header["sh_addr"]/word_byte_width) > word_addr: # fill gap with zeroes
+      if group_same:
+        outfile.write("[{:0{aw}{rad_a}}..{:0{aw}{rad_a}}]: {:0{dw}{rad_d}};\n".format(word_addr, (s.header["sh_addr"]/word_byte_width)-1, 0, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
+      else:
+        for wa in range(word_addr, int(s.header["sh_addr"]/word_byte_width)):
+          outfile.write("{:0{aw}{rad_a}}: {:0{dw}{rad_d}};\n".format(wa, 0, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
+      word_addr = int(s.header["sh_addr"]/word_byte_width)
+    for word in group_bytes_padded(s.data(), word_byte_width):
       data = int.from_bytes(word, byteorder='little', signed=(True if data_rad == 'DEC' else False))
-      outfile.write("{:0{aw}{rad_a}}: {:0{dw}{rad_d}};\n".format(addr, data, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
-      addr += 1
+      outfile.write("{:0{aw}{rad_a}}: {:0{dw}{rad_d}};\n".format(word_addr, data, aw=max_aw, rad_a=rad_to_fmt(addr_rad), dw=max_dw, rad_d=rad_to_fmt(data_rad)))
+      word_addr += 1
   outfile.write("END;")
 
 #################
@@ -214,7 +220,7 @@ def main():
       if (args.subcmd == "hex"):
         elf_sections_to_hex(sections, out_f, args.word_size)
       if (args.subcmd == "mif"):
-        elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix)
+        elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix, args.group_same)
     exit(0)
 
 if __name__ == "__main__":
