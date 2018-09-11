@@ -28,6 +28,10 @@ parser.add_argument('--only-section', nargs='+', default=None, metavar='SECTION'
                     help="List the elf SECTIONs to use when generating the output (default all).")
 parser.add_argument('--exclude-section', nargs='+', default=None, metavar='SECTION',
         help="List the elf SECTIONs to exclude when generating the output (default none). Note: SECTIONs listed here will be excluded from the sections specified with --only-section as well.")
+parser.add_argument('-s', '--start-at', type=auto_pos_int, default=0, metavar='START_ADDR',
+        help="The address at which to start considering the content of the elf file")
+parser.add_argument('-e', '--end-at', type=auto_pos_int, default=None, metavar='END_ADDR',
+        help="The address at which to stop considering the content of the elf file")
 parser.add_argument('-f', '--force-skip', action="store_true",
                     help="In case a section overlaps with an earlier section, force skipping.")
 parser.add_argument('-v', '--verbose', action='count', default=0,
@@ -146,28 +150,41 @@ def filter_elf_sections(sections, only=None, exclude=None, force_skip=False):
 # write hex file #
 ##################
 
-def elf_sections_to_hex(sections, outfile, byte_width, force_skip=False):
+def elf_sections_to_hex(sections, outfile, byte_width, start_addr, end_addr, force_skip=False):
   verboseprint(1,"Creating HEX file")
   ssections = sorted(sections, key = lambda x: x.header["sh_addr"])
-  last_addr = 0
+  last_addr = start_addr
   remaining = bytearray(0)
+
   for s in ssections:
+    base = s.header["sh_addr"]
+    top  = base + s.header["sh_size"]
     # skip empty sections
     if s.header["sh_size"] == 0:
       continue
+    # skip too low
+    if top < start_addr:
+      continue
+    # break too high
+    if end_addr:
+      if end_addr < base:
+        break
     # sections with content...
-    addr = s.header["sh_addr"]
     padding = remaining # fold in unaligned bytes from previous section
-    if addr > last_addr: # fill gap with zeroes
-      padding += bytearray(addr - last_addr)
+    offset = 0
+    if base > last_addr: # fill gap with zeroes
+      padding += bytearray(base - last_addr)
+    else:
+      offset = last_addr - base
     remaining = bytearray(0) # reset remaining bytes
-    for g in group_bytes(padding + s.data(), byte_width):
+    for g in group_bytes(padding + s.data()[offset:], byte_width):
       if len(g) == byte_width:
         outfile.write("{:s}\n".format(dump_hex(g)))
       else:
         remaining = g
     # prepare next step
-    last_addr = addr + s.header["sh_size"]
+    last_addr = top
+
   # remaining bytes to write ...
   if len(remaining) != 0:
     outfile.write(dump_hex_padded(remaining, byte_width))
@@ -218,7 +235,7 @@ def main():
     with open(args.output,"w") as out_f:
       verboseprint(1,"Opened {:s} for output".format(args.output))
       if (args.subcmd == "hex"):
-        elf_sections_to_hex(sections, out_f, args.word_size)
+        elf_sections_to_hex(sections, out_f, args.word_size, args.start_at, args.end_at)
       if (args.subcmd == "mif"):
         elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix, args.group_same)
     exit(0)
