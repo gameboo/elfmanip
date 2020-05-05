@@ -233,8 +233,11 @@ def elf_sections_to_mif(sections, outfile, word_byte_width, addr_rad, data_rad, 
 
 def main():
   if args.output == None:
-    args.output, _ = op.splitext(args.elf)
-    args.output = op.basename(args.output)+"."+args.subcmd
+    nm = op.basename(op.splitext(args.elf)[0])
+    args.output = {
+      'to-hex': nm+".hex",
+      'to-mif': nm+".mif"
+    }.get(args.subcmd, None)
   with open(args.elf,"rb") as in_f:
     elf = ELFFile(in_f)
     if (args.subcmd == "info"):
