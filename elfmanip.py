@@ -254,7 +254,7 @@ def main():
         for sec in elf.iter_sections():
           rpt = "Null section \"{:s}\"".format(sec.name)
           if not sec.is_null():
-            rpt = "Section {:20s} -- start: 0x{:016x}  size: {:8d} bytes".format(sec.name, sec.header.sh_addr, sec.data_size)
+            rpt = "Section {:>20s} -- type: {:>15s} start: 0x{:016x}  size: {:>8d} bytes".format(sec.name, sec.header.sh_type, sec.header.sh_addr, sec.data_size)
           print(rpt)
     else:
       sections = filter_elf_sections(elf.iter_sections(), args.only_section, args.exclude_section, args.force_skip)
