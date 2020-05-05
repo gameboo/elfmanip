@@ -25,9 +25,9 @@ parser.add_argument('elf', type=str, metavar='ELF',
 parser.add_argument('-o', '--output', type=str, metavar='OUTPUT',
                     help="The OUTPUT file to export to. When unspecified, it is derived from the ELF input.")
 parser.add_argument('--only-section', nargs='+', default=None, metavar='SECTION',
-                    help="List the elf SECTIONs to use when generating the output (default all).")
+        help="Filters the list the elf SECTIONs to include only the specified ones. Note: this filter is applied before the --exclude-section filter.")
 parser.add_argument('--exclude-section', nargs='+', default=None, metavar='SECTION',
-        help="List the elf SECTIONs to exclude when generating the output (default none). Note: SECTIONs listed here will be excluded from the sections specified with --only-section as well.")
+        help="Filters the list the elf SECTIONs to exclude the specified ones. Note: this filter is applied after the --only-section filter.")
 parser.add_argument('-s', '--start-at', type=auto_pos_int, default=0, metavar='START_ADDR',
         help="The address at which to start considering the content of the elf file")
 parser.add_argument('-e', '--end-at', type=auto_pos_int, default=None, metavar='END_ADDR',
@@ -40,14 +40,20 @@ parser.add_argument('-v', '--verbose', action='count', default=0,
 subcmds = parser.add_subparsers(dest='subcmd',metavar='sub-command',help="Individual sub-command help available by invoking it with -h or --help.")
 subcmds.required = True
 
+# info
+infocmd = subcmds.add_parser('info',
+                    help="Print ELF file info.")
+infocmd.add_argument('--list-sections', action="store_true",
+                    help="Print a list of the available ELF sections in the file.")
+
 # hex
-hexcmd = subcmds.add_parser('hex',
+hexcmd = subcmds.add_parser('to-hex',
                     help="Generate a HEX file.")
 hexcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
                     help="The size in bytes of a memory word.")
 
 # mif
-mifcmd = subcmds.add_parser('mif',
+mifcmd = subcmds.add_parser('to-mif',
                     help="Generate a MIF file.")
 mifcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
                     help="The size in bytes of a memory word.")
@@ -124,7 +130,7 @@ def input_y_n(prompt):
 # elf sections filtering #
 ##########################
 
-def filter_elf_sections(sections, only=None, exclude=None, force_skip=False): 
+def filter_elf_sections(sections, only=None, exclude=None, force_skip=False):
   filtered = list(sections)
   if only:
     filtered = [x for x in filtered if str(x.name) in only]
@@ -150,7 +156,7 @@ def filter_elf_sections(sections, only=None, exclude=None, force_skip=False):
 # write hex file #
 ##################
 
-def elf_sections_to_hex(sections, outfile, byte_width, start_addr, end_addr, force_skip=False):
+def elf_sections_to_hex(sections, outfile, byte_width, start_addr, end_addr):
   verboseprint(1,"Creating HEX file")
   ssections = sorted(sections, key = lambda x: x.header["sh_addr"])
   last_addr = start_addr
@@ -231,13 +237,30 @@ def main():
     args.output = op.basename(args.output)+"."+args.subcmd
   with open(args.elf,"rb") as in_f:
     elf = ELFFile(in_f)
-    sections = filter_elf_sections(elf.iter_sections(), args.only_section, args.exclude_section, args.force_skip)
-    with open(args.output,"w") as out_f:
-      verboseprint(1,"Opened {:s} for output".format(args.output))
-      if (args.subcmd == "hex"):
-        elf_sections_to_hex(sections, out_f, args.word_size, args.start_at, args.end_at)
-      if (args.subcmd == "mif"):
-        elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix, args.group_same)
+    if (args.subcmd == "info"):
+      print("-------- {:s} --------".format(args.elf))
+      print("-- HEADER --")
+      print("EI_CLASS: {:s}".format(elf.header.e_ident.EI_CLASS))
+      print("EI_DATA: {:s}".format(elf.header.e_ident.EI_DATA))
+      print("EI_OSABI: {:s}".format(elf.header.e_ident.EI_OSABI))
+      print("e_type: {:s}".format(elf.header.e_type))
+      print("e_machine: {:s}".format(elf.header.e_machine))
+      print("e_entry: 0x{:016x}".format(elf.header.e_entry))
+      if args.list_sections:
+        print("-- SECTIONS --")
+        for sec in elf.iter_sections():
+          rpt = "Null section \"{:s}\"".format(sec.name)
+          if not sec.is_null():
+            rpt = "Section {:20s} -- start: 0x{:016x}  size: {:8d} bytes".format(sec.name, sec.header.sh_addr, sec.data_size)
+          print(rpt)
+    else:
+      sections = filter_elf_sections(elf.iter_sections(), args.only_section, args.exclude_section, args.force_skip)
+      with open(args.output,"w") as out_f:
+        verboseprint(1,"Opened {:s} for output".format(args.output))
+        if (args.subcmd == "to-hex"):
+          elf_sections_to_hex(sections, out_f, args.word_size, args.start_at, args.end_at)
+        if (args.subcmd == "to-mif"):
+          elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix, args.group_same)
     exit(0)
 
 if __name__ == "__main__":
