@@ -21,50 +21,50 @@ def auto_pos_int (x):
 parser = argparse.ArgumentParser(description='Reads an elf file and exports it to another memory format.')
 
 parser.add_argument('elf', type=str, metavar='ELF',
-                    help="The elf file to re-export.")
+  help="The elf file to re-export.")
 parser.add_argument('-o', '--output', type=str, metavar='OUTPUT',
-                    help="The OUTPUT file to export to. When unspecified, it is derived from the ELF input.")
+  help="The OUTPUT file to export to. When unspecified, it is derived from the ELF input.")
 parser.add_argument('--only-section', nargs='+', default=None, metavar='SECTION',
-        help="Filters the list the elf SECTIONs to include only the specified ones. Note: this filter is applied before the --exclude-section filter.")
+  help="Filters the list the elf SECTIONs to include only the specified ones. Note: this filter is applied before the --exclude-section filter.")
 parser.add_argument('--exclude-section', nargs='+', default=None, metavar='SECTION',
-        help="Filters the list the elf SECTIONs to exclude the specified ones. Note: this filter is applied after the --only-section filter.")
-parser.add_argument('-s', '--start-at', type=auto_pos_int, default=0, metavar='START_ADDR',
-        help="The address at which to start considering the content of the elf file")
-parser.add_argument('-e', '--end-at', type=auto_pos_int, default=None, metavar='END_ADDR',
-        help="The address at which to stop considering the content of the elf file")
+  help="Filters the list the elf SECTIONs to exclude the specified ones. Note: this filter is applied after the --only-section filter.")
+parser.add_argument('-s', '--start-addr', type=auto_pos_int, default=0, metavar='START_ADDR',
+  help="The address at which to start considering the content of the elf file")
+parser.add_argument('-i', '--image-size', type=auto_pos_int, default=None, metavar='IMG_SZ',
+  help="The size (in bytes) of the image to generate")
 parser.add_argument('-f', '--force-skip', action="store_true",
-                    help="In case a section overlaps with an earlier section, force skipping.")
+  help="In case a section overlaps with an earlier section, force skipping.")
 parser.add_argument('-v', '--verbose', action='count', default=0,
-        help="Increase verbosity level by adding more \"v\".")
+  help="Increase verbosity level by adding more \"v\".")
 
 subcmds = parser.add_subparsers(dest='subcmd',metavar='sub-command',help="Individual sub-command help available by invoking it with -h or --help.")
 subcmds.required = True
 
 # info
 infocmd = subcmds.add_parser('info',
-                    help="Print ELF file info.")
+  help="Print ELF file info.")
 infocmd.add_argument('--list-sections', action="store_true",
-                    help="Print a list of the available ELF sections in the file.")
+  help="Print a list of the available ELF sections in the file.")
 
 # hex
 hexcmd = subcmds.add_parser('to-hex',
-                    help="Generate a HEX file.")
+  help="Generate a HEX file.")
 hexcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
-                    help="The size in bytes of a memory word.")
+  help="The size in bytes of a memory word.")
 
 # mif
 mifcmd = subcmds.add_parser('to-mif',
-                    help="Generate a MIF file.")
+  help="Generate a MIF file.")
 mifcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
-                    help="The size in bytes of a memory word.")
+  help="The size in bytes of a memory word.")
 mifcmd.add_argument('-g', '--group-same', action="store_true",
-                    help="Group successive same values of padding in one line.")
+  help="Group successive same values of padding in one line.")
 #binary (BIN), hexadecimal (HEX), octal (OCT), signed decimal (DEC), unsigned decimal (UNS)
 radices = ['BIN', 'HEX', 'OCT', 'DEC', 'UNS']
 mifcmd.add_argument('-a', '--address-radix', choices=radices, default='HEX', metavar='RADIX',
-                    help="RADIX used to display the addresses, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
+  help="RADIX used to display the addresses, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
 mifcmd.add_argument('-d', '--data-radix', choices=radices, default='HEX', metavar='RADIX',
-                    help="RADIX used to display the data, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
+  help="RADIX used to display the data, one of {{{:s}}}, (default: HEX)".format(", ".join(radices)))
 
 args = parser.parse_args()
 
@@ -156,7 +156,7 @@ def filter_elf_sections(sections, only=None, exclude=None, force_skip=False):
 # write hex file #
 ##################
 
-def elf_sections_to_hex(sections, outfile, byte_width, start_addr, end_addr):
+def elf_sections_to_hex(sections, outfile, byte_width, start_addr, img_sz):
   verboseprint(1,"Creating HEX file")
   ssections = sorted(sections, key = lambda x: x.header["sh_addr"])
   last_addr = start_addr
@@ -172,9 +172,8 @@ def elf_sections_to_hex(sections, outfile, byte_width, start_addr, end_addr):
     if top < start_addr:
       continue
     # break too high
-    if end_addr:
-      if end_addr < base:
-        break
+    if img_sz and start_addr + img_sz - 1 < base:
+      break
     # sections with content...
     padding = remaining # fold in unaligned bytes from previous section
     offset = 0
@@ -194,6 +193,10 @@ def elf_sections_to_hex(sections, outfile, byte_width, start_addr, end_addr):
   # remaining bytes to write ...
   if len(remaining) != 0:
     outfile.write(dump_hex_padded(remaining, byte_width))
+
+  # fill in gap until end addr if necessary
+  if img_sz and last_addr < start_addr + img_sz - 1:
+    outfile.write("@{:X}\n00000000".format(img_sz - 1))
 
 ##################
 # write mif file #
@@ -261,7 +264,7 @@ def main():
       with open(args.output,"w") as out_f:
         verboseprint(1,"Opened {:s} for output".format(args.output))
         if (args.subcmd == "to-hex"):
-          elf_sections_to_hex(sections, out_f, args.word_size, args.start_at, args.end_at)
+          elf_sections_to_hex(sections, out_f, args.word_size, args.start_addr, args.image_size)
         if (args.subcmd == "to-mif"):
           elf_sections_to_mif(sections, out_f, args.word_size, args.address_radix, args.data_radix, args.group_same)
     exit(0)
