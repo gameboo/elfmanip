@@ -50,7 +50,7 @@ infocmd.add_argument('--list-sections', action="store_true",
 hexcmd = subcmds.add_parser('to-hex',
   help="Generate a HEX file.")
 hexcmd.add_argument('-w', '--word-size', type=auto_pos_int, default=4, metavar="BYTE_WIDTH",
-  help="The size in bytes of a memory word.")
+  help="The size in bytes of a memory word (default is 4 bytes or 32 bits).")
 
 # mif
 mifcmd = subcmds.add_parser('to-mif',
@@ -163,16 +163,20 @@ def elf_sections_to_hex(sections, outfile, byte_width, start_addr, img_sz):
   remaining = bytearray(0)
 
   for s in ssections:
+    verboseprint(1,"Handling section \"{:s}\"".format(s.name))
     base = s.header["sh_addr"]
     top  = base + s.header["sh_size"]
     # skip empty sections
     if s.header["sh_size"] == 0:
+      verboseprint(2,"Skipping empty section \"{:s}\"".format(s.name))
       continue
     # skip too low
     if top < start_addr:
+      verboseprint(2,"Skipping section \"{:s}\" as it ends before specified start address 0x{:016x}".format(s.name, start_addr))
       continue
     # break too high
     if img_sz and start_addr + img_sz - 1 < base:
+      verboseprint(2,"Skipping section \"{:s}\" (and potential other remaining sections) as it starts past the end of the desired image with specified size {:d} byte(s)".format(s.name, img_sz))
       break
     # sections with content...
     padding = remaining # fold in unaligned bytes from previous section
@@ -196,6 +200,7 @@ def elf_sections_to_hex(sections, outfile, byte_width, start_addr, img_sz):
 
   # fill in gap until end addr if necessary
   if img_sz and last_addr < start_addr + img_sz - 1:
+    verboseprint(1,"Trailing padding between 0x{:016x} and 0x{:016x}".format(last_addr, start_addr + img_sz - 1))
     outfile.write("@{:X}\n00000000".format(img_sz - 1))
 
 ##################
