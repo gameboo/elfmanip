@@ -131,7 +131,8 @@ def input_y_n(prompt):
 ##########################
 
 def filter_elf_sections(sections, only=None, exclude=None, force_skip=False):
-  filtered = list(sections)
+  filtered = [x for x in sections if x.header['sh_flags'] & 0x2
+                                  if x.data_size != 0]
   if only:
     filtered = [x for x in filtered if str(x.name) in only]
   if exclude:
